@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probability Pal Flashcards</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for a friendly feel */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Styles for the 3D card flip animation.
+          We use custom CSS here because 3D transforms are complex for plain Tailwind.
+        */
+        .card-container {
+            perspective: 1000px;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.7s;
+            transform-style: preserve-3d;
+        }
+
+        .card.is-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front,
+        .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden; /* Safari */
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            border-radius: 1rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        }
+
+        .card-front {
+            background-color: white;
+            color: #4338ca; /* indigo-800 */
+        }
+
+        .card-back {
+            background-color: #e0e7ff; /* indigo-100 */
+            color: #3730a3; /* indigo-900 */
+            transform: rotateY(180deg);
+            /* Ensure text starts from the top */
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            overflow-y: auto; /* Allow scrolling for long answers */
+        }
+
+        .card-back h3 {
+            font-weight: 700; /* bold */
+            color: #4338ca; /* indigo-800 */
+            font-size: 1.125rem; /* text-lg */
+            margin-bottom: 0.5rem; /* mb-2 */
+        }
+
+        .card-back p {
+            font-size: 0.875rem; /* text-sm */
+            line-height: 1.5; /* leading-relaxed */
+        }
+    </style>
+    <!-- Load Google Font (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-indigo-50 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Application Container -->
+    <div class="w-full max-w-2xl">
+        
+        <!-- Timer Display -->
+        <div id="timer" class="absolute top-4 right-4 md:top-6 md:right-6 text-3xl font-bold text-indigo-700 bg-white px-4 py-2 rounded-lg shadow-md">
+            5:00
+        </div>
+
+        <!-- Main Content: Cards and Controls -->
+        <div id="main-content" class="flex flex-col items-center">
+            
+            <!-- Card Counter -->
+            <div id="card-counter" class="text-lg font-semibold text-indigo-600 mb-2">
+                Card 1 / 100
+            </div>
+
+            <!-- Flashcard -->
+            <div id="flashcard" class="card-container card w-full max-w-lg h-80 md:h-96 cursor-pointer">
+                <div class="card-inner">
+                    <!-- Front of the Card (Question) -->
+                    <div id="card-front" class="card-front text-xl md:text-2xl font-semibold text-center">
+                        Loading question...
+                    </div>
+                    <!-- Back of the Card (Answer) -->
+                    <div id="card-back" class="card-back">
+                        <h3>Answer</h3>
+                        <p>Loading answer...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls: Pause and Next -->
+            <div class="flex gap-4 mt-6">
+                <button id="last-button" class="bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-gray-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">
+                    Last Card
+                </button>
+                <button id="pause-button" class="bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+                    Pause
+                </button>
+                <button id="next-button" class="bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-gray-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">
+                    Next Card
+                </button>
+            </div>
+
+            <!-- Wikipedia Link -->
+            <a href="https://en.wikipedia.org/wiki/List_of_probability_distributions" target="_blank" rel="noopener noreferrer" class="text-indigo-700 hover:text-indigo-900 hover:underline mt-8 text-center">
+                Learn more at Wikipedia: List of Probability Distributions
+            </a>
+        </div>
+
+        <!-- Completion Message (Initially Hidden) -->
+        <div id="completion-message" class="hidden text-center">
+            <h2 class="text-5xl font-bold text-indigo-800 mb-6">Yay! You did it!</h2>
+            <p class="text-xl text-indigo-600">You've completed all 100 flashcards. Great job!</p>
+            <button id="restart-button" class="mt-8 bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all duration-200">
+                Restart
+            </button>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- DATA: Flashcard Content ---
+        
+        /**
+         * Generates and returns the array of 100 flashcard objects.
+         */
+        function getFlashcardData() {
+            return [
+                // Binomial (12)
+                { q: "What are the 4 conditions for a Binomial experiment?", a: "<h3>Answer</h3><p>1. A fixed number of trials (n).<br>2. Each trial is independent.<br>3. Each trial has only two possible outcomes (success or failure).<br>4. The probability of success (p) is constant for each trial.</p>" },
+                { q: "What does the Binomial random variable X represent?", a: "<h3>Answer</h3><p>It represents the total number of 'successes' in 'n' independent Bernoulli trials.</p>" },
+                { q: "What is the probability mass function (PMF) for a Binomial distribution B(n, p)?", a: "<h3>Answer</h3><p>P(X = k) = C(n, k) * p<sup>k</sup> * (1-p)<sup>n-k</sup><br>Where C(n, k) is 'n choose k', the number of combinations.</p>" },
+                { q: "What is the expected value (mean) of a Binomial distribution B(n, p)?", a: "<h3>Answer</h3><p>E[X] = n * p<br><br>Explanation: If you have 100 trials (n=100) and a 30% chance of success (p=0.3), you'd expect 100 * 0.3 = 30 successes.</p>" },
+                { q: "What is the variance of a Binomial distribution B(n, p)?", a: "<h3>Answer</h3><p>Var(X) = n * p * (1-p)<br><br>Explanation: The variance is maximized when p=0.5 (most uncertainty) and is 0 when p=0 or p=1 (total certainty).</p>" },
+                { q: "You flip a fair coin 10 times. What is the probability of getting exactly 6 heads?", a: "<h3>Answer</h3><p>This is B(n=10, p=0.5).<br>P(X = 6) = C(10, 6) * (0.5)<sup>6</sup> * (0.5)<sup>4</sup><br>C(10, 6) = 210<br>P(X = 6) = 210 * (0.5)<sup>10</sup> &approx; 0.205</p>" },
+                { q: "A factory finds 5% of its products are defective. If you test 20 products, what distribution models the number of defects?", a: "<h3>Answer</h3><p>Binomial distribution with n = 20 (trials) and p = 0.05 (probability of 'success', i.e., defect).</p>" },
+                { q: "What is the shape of a Binomial distribution when p = 0.5?", a: "<h3>Answer</h3><p>Symmetrical. As 'n' increases, it becomes very similar to a Normal distribution.</p>" },
+                { q: "What is the shape of a Binomial distribution when p is close to 0?", a: "<h3>Answer</h3><p>Skewed to the right (positive skew). Most outcomes will be a low number of successes.</p>" },
+                { q: "What is the shape of a Binomial distribution when p is close to 1?", a: "<h3>Answer</h3><p>Skewed to the left (negative skew). Most outcomes will be a high number of successes.</p>" },
+                { q: "What is a Bernoulli trial?", a: "<h3>Answer</h3><p>A single random experiment with exactly two possible outcomes, 'success' and 'failure', where the probability of success is 'p'. It's a Binomial distribution with n=1.</p>" },
+                { q: "When can a Binomial distribution be approximated by a Poisson distribution?", a: "<h3>Answer</h3><p>When 'n' is very large and 'p' is very small. The Poisson parameter &lambda; (lambda) is set to n*p.</p>" },
+
+                // Uniform (Discrete) (6)
+                { q: "What is a Discrete Uniform distribution?", a: "<h3>Answer</h3><p>A distribution where a finite number of outcomes (e.g., 1, 2, 3, 4, 5, 6) are all equally likely to occur.</p>" },
+                { q: "You roll a single fair 6-sided die. What is the probability of rolling a 4?", a: "<h3>Answer</h3><p>P(X = 4) = 1/6<br><br>Explanation: There are 6 equally likely outcomes (n=6), so the probability of any single outcome is 1/n.</p>" },
+                { q: "What is the PMF for a Discrete Uniform distribution with n outcomes?", a: "<h3>Answer</h3><p>P(X = k) = 1/n, for k = 1, 2, ..., n (or any 'n' distinct values).</p>" },
+                { q: "What is the expected value (mean) of rolling a fair 6-sided die?", a: "<h3>Answer</h3><p>E[X] = (n + 1) / 2 = (6 + 1) / 2 = 3.5<br><br>Explanation: It's the average of the minimum (1) and maximum (6) possible outcomes.</p>" },
+                { q: "What is the variance of a Discrete Uniform distribution with outcomes 1, 2, ..., n?", a: "<h3>Answer</h3><p>Var(X) = (n<sup>2</sup> - 1) / 12</p>" },
+                { q: "Give an example of a Discrete Uniform distribution besides a die roll.", a: "<h3>Answer</h3><p>Drawing a specific card (e.g., the Ace of Spades) from a standard 52-card deck. The probability is 1/52 for any single card.</p>" },
+
+                // Uniform (Continuous) (7)
+                { q: "What is a Continuous Uniform distribution U(a, b)?", a: "<h3>Answer</h3><p>A distribution where all outcomes in a continuous interval [a, b] are equally likely. The probability density is constant within this interval and zero everywhere else.</p>" },
+                { q: "What is the probability density function (PDF) for a U(a, b) distribution?", a: "<h3>Answer</h3><p>f(x) = 1 / (b - a), for a &le; x &le; b<br>f(x) = 0, otherwise<br><br>Explanation: The total area under the PDF must be 1. Since the shape is a rectangle with width (b-a), the height must be 1/(b-a).</p>" },
+                { q: "For a U(0, 10) distribution, what is P(X < 2)?", a: "<h3>Answer</h3><p>P(X < 2) = (2 - 0) * (1 / (10 - 0)) = 2 * (1/10) = 0.2<br><br>Explanation: It's the area of the rectangle from x=0 to x=2. Width = 2, Height = 1/10.</p>" },
+                { q: "In a Continuous Uniform distribution, what is the probability of any *single*, exact value (e.g., P(X = 3))?", a: "<h3>Answer</h3><p>Zero.<br><br>Explanation: For any continuous distribution, the probability of a single point is zero. Probability is only defined over an interval (it's an area, not a height).</p>" },
+                { q: "A bus arrives uniformly every 20 minutes (from 0 to 20). What's the probability you wait more than 15 minutes?", a: "<h3>Answer</h3><p>This is U(0, 20). We want P(X > 15).<br>The interval is [15, 20], so the width is 5.<br>The PDF height is 1 / (20 - 0) = 1/20.<br>P(X > 15) = (20 - 15) * (1/20) = 5 * (1/20) = 1/4 or 0.25.</p>" },
+                { q: "What is the expected value (mean) of a U(a, b) distribution?", a: "<h3>Answer</h3><p>E[X] = (a + b) / 2<br><br>Explanation: The mean is simply the midpoint of the interval, as the distribution is perfectly symmetrical.</p>" },
+                { q: "What is the variance of a U(a, b) distribution?", a: "<h3>Answer</h3><p>Var(X) = (b - a)<sup>2</sup> / 12</p>" },
+
+                // Geometric (8)
+                { q: "What does the Geometric random variable X represent?", a: "<h3>Answer</h3><p>It represents the number of independent Bernoulli trials needed to get the *first* success.</p>" },
+                { q: "What is the key difference between Binomial and Geometric distributions?", a: "<h3>Answer</h3><p>Binomial has a *fixed number of trials* (n) and counts *total successes*. <br>Geometric has a *variable number of trials* and counts trials *until the first success*.</p>" },
+                { q: "What is the PMF for a Geometric distribution with success probability p?", a: "<h3>Answer</h3><p>P(X = k) = (1-p)<sup>k-1</sup> * p<br><br>Explanation: This is the probability of (k-1) failures, followed by one success.</p>" },
+                { q: "You flip a coin until you get heads (p=0.5). What's the probability the first head is on the 3rd flip?", a: "<h3>Answer</h3><p>This means Fail, Fail, Success (Tails, Tails, Heads).<br>P(X = 3) = (1-0.5)<sup>3-1</sup> * (0.5) = (0.5)<sup>2</sup> * (0.5) = 0.125</p>" },
+                { q: "What is the expected value (mean) of a Geometric distribution?", a: "<h3>Answer</h3><p>E[X] = 1 / p<br><br>Explanation: If the chance of success is 1/10 (p=0.1), you'd expect to wait 1 / 0.1 = 10 trials to get the first success.</p>" },
+                { q: "What is the variance of a Geometric distribution?", a: "<h3>Answer</h3><p>Var(X) = (1 - p) / p<sup>2</sup></p>" },
+                { q: "What is the 'memoryless' property of the Geometric distribution?", a: "<h3>Answer</h3><p>It means the past failures don't affect future probabilities. <br>P(X > n + k | X > n) = P(X > k).<br>If you've already flipped 10 tails, the chance of flipping 3 more tails before a head is the *same* as the chance of flipping 3 tails from the start.</p>" },
+                { q: "What is the shape of every Geometric distribution?", a: "<h3>Answer</h3><p>Always skewed to the right. The most likely outcome is always k=1 (success on the first trial), and the probability decreases as k increases.</p>" },
+
+                // Exponential (8)
+                { q: "What does the Exponential distribution typically model?", a: "<h3>Answer</h3><p>The time *between* events in a Poisson process (where events happen at a constant average rate).</p>" },
+                { q: "If a call center receives &lambda;=5 calls per hour (Poisson), what distribution models the time until the *next* call?", a: "<h3>Answer</h3><p>An Exponential distribution with the same rate parameter, &lambda; = 5 calls/hour.</p>" },
+                { q: "What is the PDF for an Exponential distribution with rate &lambda;?", a: "<h3>Answer</h3><p>f(x) = &lambda; * e<sup>-&lambda;x</sup>, for x &ge; 0</p>" },
+                { q: "What is the expected value (mean) of an Exponential distribution with rate &lambda;?", a: "<h3>Answer</h3><p>E[X] = 1 / &lambda;<br><br>Explanation: If the rate (&lambda;) is 5 calls/hour, the mean time *between* calls (E[X]) is 1/5 = 0.2 hours (or 12 minutes).</p>" },
+                { q: "What is the variance of an Exponential distribution with rate &lambda;?", a: "<h3>Answer</h3><p>Var(X) = 1 / &lambda;<sup>2</sup><br><br>Note: This means the standard deviation is 1/&lambda;, which is equal to the mean. This is a unique property.</p>" },
+                { q: "What is the 'memoryless' property of the Exponential distribution?", a: "<h3>Answer</h3><p>The time already waited doesn't affect the future. <br>P(X > s + t | X > s) = P(X > t).<br>If a lightbulb (modeled by Exp.) has already lasted 100 hours, its probability of lasting *another* 50 hours is the same as a new bulb's probability of lasting 50 hours.</p>" },
+                { q: "What is the shape of every Exponential distribution?", a: "<h3>Answer</h3><p>Always skewed to the right. The most likely waiting time is very short (close to 0), and long waiting times are increasingly rare.</p>" },
+                { q: "What is the relationship between the Geometric and Exponential distributions?", a: "<h3>Answer</h3><p>The Geometric distribution is the discrete counterpart of the Exponential distribution. Both model 'waiting time' for a success and are memoryless.</p>" },
+
+                // Poisson (10)
+                { q: "What does the Poisson distribution model?", a: "<h3>Answer</h3><p>The number of times an event occurs within a fixed interval of time or space, given the events occur at a constant average rate (&lambda;) and independently of the time since the last event.</p>" },
+                { q: "Give two examples of phenomena modeled by a Poisson distribution.", a: "<h3>Answer</h3><p>1. Number of calls to a call center in one hour.<br>2. Number of typos on a page in a book.<br>(Also: cars arriving at a toll booth, radioactive decay events, etc.)</p>" },
+                { q: "What is the single parameter of a Poisson distribution?", a: "<h3>Answer</h3><p>The average rate, &lambda; (lambda). This is the expected number of events in the given interval.</p>" },
+                { q: "What is the PMF for a Poisson distribution with rate &lambda;?", a: "<h3>Answer</h3><p>P(X = k) = (&lambda;<sup>k</sup> * e<sup>-&lambda;</sup>) / k!<br>Where k = 0, 1, 2, ...</p>" },
+                { q: "What is the expected value (mean) of a Poisson(&lambda;) distribution?", a: "<h3>Answer</h3><p>E[X] = &lambda;<br><br>Explanation: The mean is simply the rate parameter itself.</p>" },
+                { q: "What is the variance of a Poisson(&lambda;) distribution?", a: "<h3>Answer</h3><p>Var(X) = &lambda;<br><br>Explanation: A key property of the Poisson distribution is that its mean and variance are equal.</p>" },
+                { q: "A coffee shop gets an average of 10 customers per hour. What's the probability they get *exactly* 10 customers in an hour?", a: "<h3>Answer</h3><p>Here &lambda; = 10 and k = 10.<br>P(X = 10) = (10<sup>10</sup> * e<sup>-10</sup>) / 10!<br>P(X = 10) &approx; 0.125</p>" },
+                { q: "A hospital sees 3 births per day on average. What's the probability of *zero* births on a given day?", a: "<h3>Answer</h3><p>Here &lambda; = 3 and k = 0.<br>P(X = 0) = (3<sup>0</sup> * e<sup>-3</sup>) / 0!<br>P(X = 0) = (1 * e<sup>-3</sup>) / 1 = e<sup>-3</sup> &approx; 0.0498</p>" },
+                { q: "If a shop gets 60 customers/hour, what is the Poisson parameter (&lambda;) for a 10-minute interval?", a: "<h3>Answer</h3><p>&lambda; = 10 customers.<br><br>Explanation: The rate must be scaled to the interval. 60 customers/60 minutes is 1 customer/minute. In a 10-minute interval, the average rate is 1 * 10 = 10.</p>" },
+                { q: "When can a Poisson distribution be approximated by a Normal distribution?", a: "<h3>Answer</h3><p>When the rate parameter &lambda; is large (e.g., &lambda; > 15 or 20). The Normal distribution would have &mu; = &lambda; and &sigma;<sup>2</sup> = &lambda;.</p>" },
+
+                // Normal (15)
+                { q: "What is the shape of a Normal distribution?", a: "<h3>Answer</h3><p>A symmetrical, bell-shaped curve. It is defined by its mean (&mu;) and standard deviation (&sigma;).</p>" },
+                { q: "What is the 68-95-99.7 rule (Empirical Rule)?", a: "<h3>Answer</h3><p>For a Normal distribution:<br>~68% of data falls within 1 std. dev. (&sigma;) of the mean (&mu;).<br>~95% falls within 2 std. devs.<br>~99.7% falls within 3 std. devs.</p>" },
+                { q: "What is a Standard Normal distribution?", a: "<h3>Answer</h3><p>A special case of the Normal distribution with a mean (&mu;) of 0 and a standard deviation (&sigma;) of 1. It is often denoted as Z.</p>" },
+                { q: "What is a Z-score?", a: "<h3>Answer</h3><p>A Z-score measures how many standard deviations an observation (x) is away from the mean (&mu;).<br>Z = (x - &mu;) / &sigma;</p>" },
+                { q: "If IQ scores are N(&mu;=100, &sigma;=15), what is the Z-score for an IQ of 130?", a: "<h3>Answer</h3><p>Z = (130 - 100) / 15 = 30 / 15 = 2.0<br><br>Explanation: An IQ of 130 is exactly 2 standard deviations above the mean.</p>" },
+                { q: "What percentage of people have an IQ *above* 130, if IQ is N(100, 15)?", a: "<h3>Answer</h3><p>~2.5%<br><br>Explanation: Using the 68-95-99.7 rule, 95% of data is within 2 std. devs. (between 70 and 130). This leaves 5% in the two tails. Since the curve is symmetric, half of that (2.5%) is in the upper tail (above 130).</p>" },
+                { q: "What is the Central Limit Theorem (CLT)?", a: "<h3>Answer</h3><p>The CLT states that the *sampling distribution of the sample mean* (the distribution of many sample means) will be approximately Normally distributed, *regardless* of the original population's distribution, as long as the sample size (n) is large enough (e.g., n > 30).</p>" },
+                { q: "Why is the Central Limit Theorem so important?", a: "<h3>Answer</h3><p>It allows us to use Normal distribution properties to make inferences (like confidence intervals and hypothesis tests) about a population mean, even if we don't know the population's shape.</p>" },
+                { q: "What are the mean and standard deviation of the sampling distribution of the sample mean (x-bar)?", a: "<h3>Answer</h3><p>Mean (&mu;<sub>x-bar</sub>) = &mu; (the population mean)<br>Std. Dev. (&sigma;<sub>x-bar</sub>) = &sigma; / &radic;n (This is called the Standard Error)</p>" },
+                { q: "What happens to the Standard Error (&sigma; / &radic;n) as the sample size (n) increases?", a: "<h3>Answer</h3><p>It decreases. A larger sample size leads to a less spread-out sampling distribution, meaning the sample mean (x-bar) is a more precise estimate of the population mean (&mu;).</p>" },
+                { q: "What percentage of data is *above* the mean in any Normal distribution?", a: "<h3>Answer</h3><p>50%. The mean, median, and mode are all the same, and the distribution is perfectly symmetric.</p>" },
+                { q: "Does changing the mean (&mu;) of a Normal distribution change its shape?", a: "<h3>Answer</h3><p>No. It only *shifts* the entire bell curve left or right along the x-axis.</p>" },
+                { q: "Does changing the standard deviation (&sigma;) of a Normal distribution change its shape?", a: "<h3>Answer</h3><p>Yes. A smaller &sigma; makes the curve taller and narrower (less spread out). A larger &sigma; makes the curve shorter and wider (more spread out).</p>" },
+                { q: "What is the 'continuity correction'?", a: "<h3>Answer</h3><p>A correction used when approximating a discrete distribution (like Binomial) with a continuous Normal distribution. For example, to find P(X = 10) for a Binomial, you'd find P(9.5 < Y < 10.5) on the Normal curve.</p>" },
+                { q: "What is the PDF for a Normal distribution?", a: "<h3>Answer</h3><p>It's a complex formula: <br>f(x) = (1 / (&sigma;&radic;(2&pi;))) * e<sup>-(x-&mu;)<sup>2</sup> / (2&sigma;<sup>2</sup>)</sup><br>You are almost never required to use this formula directly; you use Z-tables or software instead.</p>" },
+
+                // t-distribution (10)
+                { q: "When do you use a t-distribution instead of a Normal (Z) distribution for inference about a mean?", a: "<h3>Answer</h3><p>You use a t-distribution when:<br>1. The population standard deviation (&sigma;) is *unknown*, AND<br>2. You are using the sample standard deviation (s) to estimate it, AND<br>3. The sample size is small (e.g., n < 30) and the population is assumed to be ~Normal.</p>" },
+                { q: "How is a t-distribution different from the Standard Normal (Z) distribution?", a: "<h3>Answer</h3><p>A t-distribution is also bell-shaped and centered at 0, but it has *thicker tails*. This means it has more variability, accounting for the extra uncertainty of using the sample 's' instead of the true '&sigma;'.</p>" },
+                { q: "What parameter defines a specific t-distribution?", a: "<h3>Answer</h3><p>The 'degrees of freedom' (df). For a single sample mean test, df = n - 1, where 'n' is the sample size.</p>" },
+                { q: "What happens to the shape of the t-distribution as the degrees of freedom (df) increase?", a: "<h3>Answer</h3><p>It gets closer and closer to the Standard Normal (Z) distribution. Its tails get thinner.<br>By df > 100 (or even df > 30), they are practically identical.</p>" },
+                { q: "Why does the t-distribution approach the Z-distribution as 'n' gets large?", a: "<h3>Answer</h3><p>Because as the sample size (n) increases, the sample standard deviation (s) becomes a much more reliable and accurate estimate of the true population standard deviation (&sigma;). The 'extra uncertainty' vanishes.</p>" },
+                { q: "What is the formula for a one-sample t-statistic?", a: "<h3>Answer</h3><p>t = (x-bar - &mu;<sub>0</sub>) / (s / &radic;n)<br>This looks just like a Z-score, but uses the sample 's' instead of the population '&sigma;', and the result is compared to a t-distribution with df = n-1.</p>" },
+                { q: "Who first published the t-distribution?", a: "<h3>Answer</h3><p>William Sealy Gosset, in 1908. He worked at the Guinness brewery and had to use a pseudonym, 'Student'. This is why it's often called 'Student's t-distribution'.</p>" },
+                { q: "A t-distribution with 5 degrees of freedom will have (more/less) area in its tails than a t-distribution with 25 degrees of freedom.", a: "<h3>Answer</h3><p>More. Fewer degrees of freedom (smaller sample size) means more uncertainty and thus fatter tails to reflect that.</p>" },
+                { q: "What is the mean of every t-distribution?", a: "<h3>Answer</h3><p>0. (Just like the Standard Normal Z-distribution).</p>" },
+                { q: "When is a t-test used for 'paired' or 'matched' samples?", a: "<h3>Answer</h3><p>When you have two measurements on the *same* subject (e.g., 'before' and 'after' a treatment). You first calculate the *difference* for each pair, and then perform a one-sample t-test on those differences (testing if the mean *difference* is 0).</p>" },
+                
+                // Chi-square (χ²) (10)
+                { q: "What is a Chi-square (&chi;<sup>2</sup>) distribution typically used for?", a: "<h3>Answer</h3><p>Two main purposes:<br>1. Goodness-of-Fit tests (checking if sample data fits a hypothesized distribution).<br>2. Tests of Independence (checking if two categorical variables are related).</p>" },
+                { q: "What is the shape of a Chi-square (&chi;<sup>2</sup>) distribution?", a: "<h3>Answer</h3><p>It is *not* symmetric. It is skewed to the right. Its values are always non-negative (0 or positive).</p>" },
+                { q: "What parameter defines a specific Chi-square (&chi;<sup>2</sup>) distribution?", a: "<h3>Answer</h3><p>The 'degrees of freedom' (df). The shape of the curve changes significantly with different df.</p>" },
+                { q: "What happens to the shape of the Chi-square (&chi;<sup>2</sup>) distribution as df increase?", a: "<h3>Answer</h3><p>It becomes less skewed and more symmetric, starting to look like a Normal distribution (though still only for positive values).</p>" },
+                { q: "What is the Chi-square (&chi;<sup>2</sup>) test statistic formula?", a: "<h3>Answer</h3><p>&chi;<sup>2</sup> = &Sigma; [ (Observed - Expected)<sup>2</sup> / Expected ]<br><br>This value is summed over all categories. A large value means Observed and Expected counts are very different.</p>" },
+                { q_note: "df for Goodness-of-Fit test", q: "How do you calculate degrees of freedom (df) for a Chi-square Goodness-of-Fit test?", a: "<h3>Answer</h3><p>df = k - 1 - m<br>Where 'k' is the number of categories and 'm' is the number of parameters estimated from the data (like estimating the mean for a Poisson fit). If no parameters are estimated, df = k - 1.</p>" },
+                { q: "A 'Goodness-of-Fit' test is used to compare...?", a: "<h3>Answer</h3><p>Observed sample frequencies (counts in categories) with the Expected frequencies that would come from a specific hypothesized distribution.</p>" },
+                { q: "A 'Test of Independence' is used to compare...?", a: "<h3>Answer</h3><p>Two categorical variables (e.g., 'Smoking Status' and 'Lung Cancer Y/N') to see if they are associated or independent. It uses a contingency table (two-way table).</p>" },
+                { q_note: "df for Test of Independence", q: "How do you calculate degrees of freedom (df) for a Chi-square Test of Independence?", a: "<h3>Answer</h3><p>df = (rows - 1) * (columns - 1)<br>Where 'rows' and 'columns' are the dimensions of the contingency table (excluding totals).</p>" },
+                { q: "What is the formal definition of a Chi-square (&chi;<sup>2</sup>) variable with 'k' degrees of freedom?", a: "<h3>Answer</h3><p>It is the sum of the squares of 'k' independent Standard Normal (Z) random variables.<br>&chi;<sup>2</sup><sub>k</sub> = Z<sub>1</sub><sup>2</sup> + Z<sub>2</sub><sup>2</sup> + ... + Z<sub>k</sub><sup>2</sup></small></p>" },
+
+                // Final 14 cards (Mixture and review)
+                { q: "Which distribution models the number of failures *before* the first success?", a: "<h3>Answer</h3><p>This is a variation of the Geometric distribution. (The one we defined, P(X=k) = (1-p)<sup>k-1</sup>p, counts the trial *of* the first success. The 'failures-before' version is P(Y=k) = (1-p)<sup>k</sup>p, where k=0, 1, 2...)</p>" },
+                { q: "What is the 'Negative Binomial' distribution?", a: "<h3>Answer</h3><p>A generalization of the Geometric distribution. It counts the number of trials needed to get a fixed number (r) of successes. (A Geometric distribution is a Negative Binomial with r=1).</p>" },
+                { q: "Which continuous distribution is the 'memoryless' one?", a: "<h3>Answer</h3><p>The Exponential distribution.</p>" },
+                { q: "Which discrete distribution is the 'memoryless' one?", a: "<h3>Answer</h3><p>The Geometric distribution.</p>" },
+                { q: "What is the relationship between the Poisson and Binomial distributions?", a: "<h3>Answer</h3><p>The Poisson distribution is the limiting case of the Binomial distribution when n (trials) is very large and p (success prob.) is very small. We use &lambda; = n*p.</p>" },
+                { q: "What is the relationship between the Poisson and Exponential distributions?", a: "<h3>Answer</h3><p>If events occur according to a Poisson process (with rate &lambda;), then the waiting time *between* those events follows an Exponential distribution (with the same rate &lambda;).</p>" },
+                { q: "If a distribution has mean = 4 and variance = 4, which distribution could it be?", a: "<h3>Answer</h3><p>A Poisson distribution, where the mean and variance are always equal (&lambda; = 4).</p>" },
+                { q: "If a continuous distribution has a standard deviation equal to its mean, which distribution is it?", a: "<h3>Answer</h3><p>The Exponential distribution. (E[X] = 1/&lambda; and &sigma; = &radic;(1/&lambda;<sup>2</sup>) = 1/&lambda;).</p>" },
+                { q: "What test do you use to see if a 6-sided die is 'fair' (i.e., all sides are equally likely)?", a: "<h3>Answer</h3><p>A Chi-square (&chi;<sup>2</sup>) Goodness-of-Fit test. You would roll the die many times and compare the Observed counts for {1,2,3,4,5,6} to the Expected counts (which would be N/6 for each side).</p>" },
+                { q: "A 95% Confidence Interval from a small sample (n=15) with an unknown &sigma; would be (wider/narrower) than a 95% Z-interval.", a: "<h3>Answer</h3><p>Wider. The t-distribution's critical value (t*) will be larger than the Z-distribution's critical value (z*=1.96) to account for the extra uncertainty of not knowing &sigma;.</p>" },
+                { q: "What is the mean of a Standard Normal (Z) distribution?", a: "<h3>Answer</h3><p>0 (zero).</p>" },
+                { q: "What is the variance of a Standard Normal (Z) distribution?", a: "<h3>Answer</h3><p>1 (one). (And the standard deviation is also 1).</p>" },
+                { q: "What is the 'F-distribution'?", a: "<h3>Answer</h3><p>A distribution (also skewed right) that is the ratio of two independent Chi-square variables divided by their respective degrees of freedom. It is most famous for its use in ANOVA (Analysis of Variance) to compare the means of 3 or more groups.</p>" },
+                { q: "In a Normal distribution, what percentage of data lies between Z = -1 and Z = +2?", a: "<h3>Answer</h3><p>Approximately 81.5%.<br><br>Explanation: From the 68-95 rule: The area from Z=-1 to Z=+1 is ~68%. The area from Z=-2 to Z=+2 is ~95%.<br>Area(-1 to 0) = 68%/2 = 34%.<br>Area(0 to 2) = 95%/2 = 47.5%.<br>Total = 34% + 47.5% = 81.5%.</p>" }
+            ];
+        }
+
+        // --- STATE VARIABLES ---
+
+        let allCards = [];
+        let shuffledCards = [];
+        let currentCardIndex = 0;
+        let isFlipped = false;
+        let timerInterval = null;
+        let timeLeft = 300; // 5 minutes in seconds
+        let isPaused = false;
+
+        // --- DOM ELEMENTS ---
+
+        const card = document.getElementById('flashcard');
+        const cardInner = card.querySelector('.card-inner');
+        const cardFront = document.getElementById('card-front');
+        const cardBack = document.getElementById('card-back');
+        const timerDisplay = document.getElementById('timer');
+        const cardCounter = document.getElementById('card-counter');
+        const pauseButton = document.getElementById('pause-button');
+        const nextButton = document.getElementById('next-button');
+        const mainContent = document.getElementById('main-content');
+        const completionMessage = document.getElementById('completion-message');
+        const restartButton = document.getElementById('restart-button');
+        const lastButton = document.getElementById('last-button');
+
+        // --- CORE FUNCTIONS ---
+
+        /**
+         * Shuffles an array in place using Fisher-Yates algorithm.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        /**
+         * Loads the content for the card at the given index.
+         */
+        function loadCard(index) {
+            if (index >= shuffledCards.length) {
+                showCompletion();
+                return;
+            }
+
+            const cardData = shuffledCards[index];
+            cardFront.innerHTML = `<p>${cardData.q}</p>`;
+            cardBack.innerHTML = cardData.a; // Answer already has <h3> and <p>
+
+            cardCounter.textContent = `Card ${index + 1} / ${shuffledCards.length}`;
+
+            // Reset card state
+            card.classList.remove('is-flipped');
+            isFlipped = false;
+            
+            // Reset and start timer
+            resetTimer();
+            startTimer();
+        }
+
+        /**
+         * Flips the card over.
+         */
+        function flipCard() {
+            if (isFlipped) return; // Don't allow re-flipping
+            
+            card.classList.add('is-flipped');
+            isFlipped = true;
+            
+            // Stop the timer once the card is flipped
+            clearInterval(timerInterval);
+        }
+
+        /**
+         * Loads the next card in the deck.
+         */
+        function nextCard() {
+            currentCardIndex++;
+            loadCard(currentCardIndex);
+        }
+
+        /**
+         * Loads the previous card in the deck.
+         */
+        function lastCard() {
+            if (currentCardIndex > 0) {
+                currentCardIndex--;
+                loadCard(currentCardIndex);
+            }
+        }
+
+        /**
+         * Toggles the timer between paused and running.
+         */
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                clearInterval(timerInterval);
+                pauseButton.textContent = 'Resume';
+                pauseButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+            } else {
+                pauseButton.textContent = 'Pause';
+                pauseButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                pauseButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                // Resume the timer by starting a new interval
+                startTimerInterval();
+            }
+        }
+
+        /**
+         * Resets the timer to 5 minutes and updates display.
+         */
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 300;
+            isPaused = false;
+            pauseButton.textContent = 'Pause';
+            pauseButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            pauseButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            updateTimerDisplay();
+        }
+        
+        /**
+         * Starts the master timer countdown (called by loadCard).
+         */
+        function startTimer() {
+            if (isPaused) return; // Don't start if paused
+            
+            clearInterval(timerInterval); // Clear any old one
+            updateTimerDisplay(); // Show 5:00 immediately
+            startTimerInterval();
+        }
+
+        /**
+         * The actual setInterval logic, separated to be called by startTimer and togglePause.
+         */
+        function startTimerInterval() {
+             timerInterval = setInterval(() => {
+                if (isPaused) return; // Double-check just in case
+
+                timeLeft--;
+                updateTimerDisplay();
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    autoFlip();
+                }
+            }, 1000);
+        }
+
+        /**
+         * Updates the timer element text.
+         */
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            // Pad seconds with a '0' if less than 10
+            timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+
+        /**
+         * Automatically flips the card if the timer runs out.
+         */
+        function autoFlip() {
+            if (!isFlipped) {
+                flipCard();
+            }
+        }
+
+        /**
+         * Hides the card content and shows the completion message.
+         */
+        function showCompletion() {
+            mainContent.classList.add('hidden');
+            timerDisplay.classList.add('hidden');
+            completionMessage.classList.remove('hidden');
+        }
+
+        /**
+         * Starts the application.
+         */
+        function startApp() {
+            // Show main content, hide completion (for restarts)
+            mainContent.classList.remove('hidden');
+            timerDisplay.classList.remove('hidden');
+            completionMessage.classList.add('hidden');
+
+            // Reset state
+            allCards = getFlashcardData();
+            shuffledCards = shuffleArray([...allCards]);
+            currentCardIndex = 0;
+            
+            loadCard(currentCardIndex);
+        }
+
+        // --- EVENT LISTENERS ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add click listeners
+            card.addEventListener('click', flipCard);
+            pauseButton.addEventListener('click', togglePause);
+            nextButton.addEventListener('click', nextCard);
+            lastButton.addEventListener('click', lastCard);
+            restartButton.addEventListener('click', startApp);
+
+            // Initial app start
+            startApp();
+        });
+    </script>
+</body>
+</html>
